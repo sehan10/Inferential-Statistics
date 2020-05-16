@@ -1,0 +1,224 @@
+---
+title: "Statistical inference with the GSS data"
+output: 
+  html_document: 
+    fig_height: 4
+    highlight: pygments
+    theme: spacelab
+---
+
+## Setup
+
+### Load packages
+
+```{r load-packages, message = FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(statsr)
+
+```
+
+### Load data
+
+
+```{r load-data}
+load("gss.Rdata")
+```
+
+
+
+* * *
+
+## Part 1: Data
+
+### Sample Collection: ###
+1. Initially GSS collected data using modified probability sample (1972 - 1974)
+2. One half full probability and one half block quote used for sampling (1975 and 1976)
+3. GSS move to full probability sample for the year 1977 and onwards. 
+
+The primary sample unit (PSUs) were stratified by region, age, race before selection (first stage) and the selection of samples within PSUs (second stage) is based on block groups (BGs) and  enumeration districts (EDs). These EDs and BGs are stratified based on race and income before selection. The blocks were selected  with probabilities proportional to size (third stage).In places without block statistics, measures of size for the blocks were obtained by field counting. 
+
+### Inference: ###
+##### 01. Causality #####
+Since the data is randomly sample instead of randomly assignment hence causality is not possible but meaningful association can be explored with this data. 
+
+##### 02. Generalizability #####
+
+Participation in the study is strictly voluntary which can be a source of bias  However, in order to reduce this bias, the interviewers are given instructions to canvass and interview only after 3:00 p.m. on weekdays or during the weekend or holidays. In addition multi-stage probability sampling technique produce a representative sample of the population so inference based on this sample can be generalize to the US population.  
+
+* * *
+
+## Part 2: Research question
+
+Are conservatives (`polviews`) more likely to oppose sex education (`sexeduc`) in school compared to liberals? It is interesting to see if there is a difference between the proportions of liberals and conservation who oppose sex education because it is largely assume that conservatives are less likely in favour of sex education in public schools. 
+
+* * *
+
+## Part 3: Exploratory data analysis
+
+1. Summary of polview. 
+```{r}
+summary(gss$polviews)
+```
+
+**Observation:** 
+
+- Majority of citizens in this sample view themselves as moderate. 
+- least number of people in this sample view themselves as either extremely liberal and extremely conservative.
+
+
+2. Summary of sexeduc 
+```{r}
+summary(gss$sexeduc)
+```
+
+**Observation:** 
+
+- Majority of citizens in this sample are in favour of sex education. 
+- A significant percentage of data for sex education is missing.
+
+3. Contigency table of sexeduc and polview. 
+```{r}
+table(gss$polviews, gss$sexeduc)
+```
+
+
+
+
+**Observation:** 
+
+- Cleaning required before making any conclusion.
+
+#### Cleaning of data #### 
+```{r}
+
+# remove moderate from polview (as liberals and conservatives are interest group for this research question)
+gss <- gss %>% filter(polviews!="Moderate")
+
+# rename all variations of liberals/conservative to one liberal/conservatives #
+
+gss$polviews <- as.character(gss$polviews)
+gss$polviews[(gss$polviews == "Slightly Liberal") | (gss$polviews == "Extremely Liberal") ] <- "Liberal"
+gss$polviews[(gss$polviews == "Slightly Conservative") | (gss$polviews == "Extrmly Conservative") ] <- "Conservative"
+gss$polviews <- as.factor(gss$polviews)
+
+# remove depends level from sex education (as we are only interested in favor and oppose in this research question)
+gss <- gss[(gss$sexeduc=="Oppose") |(gss$sexeduc=="Favor"),]
+# refactor the data #
+gss$sexeduc <- factor(gss$sexeduc)
+
+# remove null values from sex education column #
+gss <- gss %>% drop_na(sexeduc)
+
+```
+4. Contigency table of sexeduc and polview.(again with clean data)
+```{r}
+table(gss$polviews, gss$sexeduc)
+```
+
+**Observation:** 
+
+- As suspected the liberals are less likely to oppose sex education than conservatives in the observed data.
+
+
+5. Proportion of `sexeduc` (favour, Oppose) with respect to `polviews` (liberals, Conservatives)
+
+```{r}
+ggplot(data=gss) + geom_bar(aes(x=polviews,fill=sexeduc))+
+  ggtitle('Proportion of sex education w.r.t to liberals and Conservatives')
+```
+
+
+**Observation:** 
+
+- As we already know from contigency table it can be seen that proportion of people who oppose sex education is higher in conservatives compared to liberals. 
+
+
+* * *
+
+## Part 4: Inference
+
+#### Step # 01: Set the hypothesis: ####
+
+1. **Null hypothesis** : 
+
+The difference of proportions of conservatives and liberals who oppose sex education is zero (there is no difference) (H0 : P_conservatives(Oppose) - P_liberals(Oppose) ==0)
+
+2. **Alternate hypothesis** : 
+
+There is a difference in proportion of liberals and conservatives who oppose sex education. (H0 : P_conservatives(Oppose) - P_liberals(Oppose) != 0)
+
+#### Step # 02: Check the conditions: ####
+
+1. **Independence**: 
+
+Based the probability design of this survey it is expected that there is an independence between and within the groups. 
+
+2. **sample size/skewness**: 
+
+Calculate P_pool to evaluate the condition for sample size/skewness 
+```{r}
+# Separate data for liberals and conservatives #
+liberal <- gss %>% filter(polviews == "Liberal")
+conservatives <- gss %>% filter(polviews == "Conservative")
+
+# count number of records in liberals and conservative dataframe #
+n_liberals <- length(liberal$sexeduc)
+n_conservatives <- length(conservatives$sexeduc)
+
+# Calculate a contigency table #
+Pconservative_oppose <- table(gss$polviews, gss$sexeduc)[1,2]
+Pliberal_oppose <- table(gss$polviews, gss$sexeduc)[2,2]
+
+# Calculate P_pool #
+P_pool <- (Pconservative_oppose+Pliberal_oppose)/(n_liberals+n_conservatives)
+
+# Conditions for sample size and skewness #
+n_liberals*P_pool
+n_liberals*(1-P_pool)
+n_conservatives*P_pool
+n_conservatives*(1-P_pool)
+
+```
+
+
+With the above calculation the sample size is more than 10 observation in each of the group and the observations are independent within and between the groups. Hence the difference of their proportions will be **nearly normally distributed**.
+
+#### Step # 03: Justification for using this method:####
+
+1. **Hypothesis Testing**:
+
+When estimating difference between two proportion (in our case `sexeduc` and `polview` ) we use hypothesis testing for two proportions. 
+
+2. **Confidence Interval**: 
+
+Since we are dealing with proportions of two categorical variable thereby we will use confidence interval for two proportion to make an inference. 
+
+
+#### Step # 04 Inference :#### 
+```{r}
+# Hypothesis test #
+inference(sexeduc, polviews, data = gss, statistic = "proportion", type = "ht", method = "theoretical", success = "Oppose", null = 0, alternative = "twosided")
+```
+
+**Observation:** 
+
+- p-value is less than signifcance level (0.05 or 5%).
+- Z statistics is quite large which means it will be away from the center of the distribution. 
+
+```{r}
+# Confidence Interval # 
+inference(sexeduc, polviews, data = gss, type = "ci", method = "theoretical",statistic = "proportion",success = "Oppose")
+```
+
+**Observation:** 
+
+- The confidence interval (0.1025 , 0.1223) doesn't contain the null value (0). 
+
+#### Step # 05 Interpret the results :#### 
+
+Since obtained p-value is less than the significance level (which is 5% in this case) thereby, we can reject null hypothesis that is `polview` is independent of `sexeduc`. To further confirm our results we can see the confidence interval at 95% (0.1025 , 0.1223) doesn't include null value (which is zero in this case). Based on these analysis we can make an inference that conservative are more likely to oppose sex education in public school compared to liberal. (roughly about 10-12% more at 95% confidence interval)
+
+
+
